@@ -20,6 +20,8 @@ public class OrderService {
 
     private final OrderProductRepository orderProductRepository;
 
+    private final PaymentService paymentService; // PaymentService 추가
+
     @Transactional
     public OrderResponse order(
         Long storeId,
@@ -40,6 +42,8 @@ public class OrderService {
             .stream()
             .mapToLong(entry -> entry.getKey().getPrice() * entry.getValue())
             .sum();
+
+        paymentService.pay(order.getId(), totalPrice);
 
         return new OrderResponse(
             order.getId(),
