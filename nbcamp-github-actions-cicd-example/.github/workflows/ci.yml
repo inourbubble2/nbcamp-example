@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository # GitHub 저장소의 코드를 로컬에 저장
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 17 # JDK 설치
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Cache Gradle dependencies # 빌드 속도 향상을 위해 Gradle 의 의존성을 캐싱
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle
+
+      - name: Build with Gradle # Gradle 을 통해 빌드
+        run: ./gradlew build -x test --no-daemon
+
+      - name: Run tests with Gradle # Gradle 을 통해 테스트
+        run: ./gradlew test --no-daemon

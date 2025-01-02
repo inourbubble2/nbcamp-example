@@ -1,0 +1,59 @@
+name: CD
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository # GitHub 저장소의 코드를 로컬에 저장
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 17 # JDK 설치
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build JAR
+        run: |
+          ./gradlew clean build -x test
+
+      - name: List local files
+        run: ls -la build/libs
+
+      - name: Compress Jar
+        run: |
+          zip -j build/libs/application.zip build/libs/*.jar
+          ls -la build/libs
+
+      - name: Configure SSH Key # SSH 키 설정 (Secrets에 저장한 SSH_PRIVATE_KEY 사용)
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
+#          if_key_missing: ignore
+
+      - name: Upload Jar to EC2 # application.jar -> EC2로 SCP
+        run: |
+          scp -v \
+            -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            build/libs/application.zip \
+            ubuntu@${{ secrets.EC2_PUBLIC_IP }}:/home/ubuntu/application.zip
+
+      - name: Deploy & Restart application  # EC2 원격 접속 → 기존 어플리케이션 중지 & 새 어플리케이션 실행
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+            pgrep -f "application.jar" && pkill -f "application.jar"
+          
+            rm -f /home/ubuntu/application.jar
+          
+            unzip -o /home/ubuntu/application.zip -d /home/ubuntu/
+          
+            mv /home/ubuntu/*.jar /home/ubuntu/application.jar
+          
+            nohup java -jar /home/ubuntu/application.jar > /home/ubuntu/log.txt 2>&1 &
+          EOF
